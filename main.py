@@ -33,26 +33,27 @@ def inch_swap(
     now_dt = now.strftime("%d-%m-%Y %H:%M")
 
     try:
-        # swap_out = Web3.toChecksumAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE")  # native ETH in NETWORK
-        swap_out_adr = Web3.toChecksumAddress(network_erc20_addr[NETWORK][swap_out_str])
-        swap_out_ABI = network_erc20_abi[NETWORK][swap_out_str]
-        swap_out_contract = get_erc20_contract(web3, swap_out_adr, swap_out_ABI)
-        out_decimals = swap_out_contract.functions.decimals().call()
-        amount_d = int_to_decimal(amount, out_decimals)
-        amount_str = float_str(amount, out_decimals)
+        if(swap_out_str != "ETH"):
+            # swap_out = Web3.toChecksumAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE")  # native ETH in NETWORK
+            swap_out_adr = Web3.toChecksumAddress(network_erc20_addr[NETWORK][swap_out_str])
+            swap_out_ABI = network_erc20_abi[NETWORK][swap_out_str]
+            swap_out_contract = get_erc20_contract(web3, swap_out_adr, swap_out_ABI)
+            out_decimals = swap_out_contract.functions.decimals().call()
+            amount_d = int_to_decimal(amount, out_decimals)
+            amount_str = float_str(amount, out_decimals)
 
-        out_allowance = inch_allowance(swap_out_adr, my_address)
+            out_allowance = inch_allowance(swap_out_adr, my_address)
 
-        swap_in_adr = Web3.toChecksumAddress(network_erc20_addr[NETWORK][swap_in_str])
-        # swap_in_ABI = network_erc20_abi[NETWORK][swap_in_str]
-        # swap_out_contract = get_erc20_contract(web3, swap_in_adr, swap_in_ABI)
+            swap_in_adr = Web3.toChecksumAddress(network_erc20_addr[NETWORK][swap_in_str])
+            # swap_in_ABI = network_erc20_abi[NETWORK][swap_in_str]
+            # swap_out_contract = get_erc20_contract(web3, swap_in_adr, swap_in_ABI)
 
-        if int(out_allowance) <= amount_d:
-            state = inch_set_approve(
-                web3, private_key, NETWORK, swap_out_adr, my_address
-            )
-            if not state:
-                return state
+            if int(out_allowance) <= amount_d:
+                state = inch_set_approve(
+                    web3, private_key, NETWORK, swap_out_adr, my_address
+                )
+                if not state:
+                    return state
 
         _1inchurl = f"{base_url}/swap?fromTokenAddress={swap_out_adr}&toTokenAddress={swap_in_adr}&amount={amount_d}&fromAddress={my_address}&slippage={SLIPPAGE_1INCH}"
         json_data = get_api_call_data(_1inchurl)

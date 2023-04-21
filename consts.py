@@ -13,6 +13,7 @@ arbitrum_erc20_address = {
     "STG": "0x6694340fc020c5E6B96567843da2df01b2CE1eb6",
     "veSTG": "0xfBd849E6007f9BC3CC2D6Eb159c045B8dc660268",
     "SUSDC": "0x892785f33CdeE22A30AEF750F285E18c18040c3e",
+    "ETH": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
 }
 
 
