@@ -1,9 +1,7 @@
 from web3 import Web3
-import requests
 import datetime
 from termcolor import cprint
 import time
-import json
 import random
 import sys
 from consts import *
@@ -55,8 +53,6 @@ def inch_swap(
             )
             if not state:
                 return state
-            else:
-                time.sleep(random.randint(sl_sec_beg, sl_sec_end))
 
         _1inchurl = f"{base_url}/swap?fromTokenAddress={swap_out_adr}&toTokenAddress={swap_in_adr}&amount={amount_d}&fromAddress={my_address}&slippage={SLIPPAGE_1INCH}"
         json_data = get_api_call_data(_1inchurl)
@@ -346,80 +342,88 @@ if __name__ == "__main__":
         gas_price = web3.eth.gas_price
         chain_id = web3.eth.chain_id
         base_url = f"https://api.1inch.io/v5.0/{chain_id}"
+        if config["OPTIONS"]["staking"]:
+            # 1) покупаем STG
+            tokens_amount = getRandomTokensAmount()
+            swap_out_str = config["OPTIONS"]["selected_token"]
+            swap_in_str = "STG"
 
-        # 1) покупаем STG
-        USDC_amount = getRandomTokensAmount()
-        swap_out_str = config["OPTIONS"]["selected_token"]
-        swap_in_str = "STG"
-
-        state = inch_swap(
-            web3,
-            private_key,
-            NETWORK,
-            swap_out_str,
-            swap_in_str,
-            my_address,
-            USDC_amount,
-        )
-        if not state:
-            sys.exit(state)
-        time.sleep(random.randint(sl_sec_beg, sl_sec_end))
-
-        # 2) начинаем апрув в контракте  STG Token для veSTG
-        aprove_adr_dict = {
-            "to_ticker": "STG",
-            "to_adr": Web3.toChecksumAddress(network_erc20_addr[NETWORK]["STG"]),
-            "spender_ticker": "veSTG",
-            "spender_adr": Web3.toChecksumAddress(network_erc20_addr[NETWORK]["veSTG"]),
-        }
-        approve_contract(
-            web3,
-            private_key,
-            NETWORK,
-            aprove_adr_dict,
-            my_address,
-        )
-        time.sleep(random.randint(sl_sec_beg, sl_sec_end))
-
-        # 3) лочим STG на 36 месяцев, получаем veSTG
-        STG_balance = get_token_balance(web3, NETWORK, my_address, swap_in_str)
-        STG_amount = STG_balance
-        if STG_amount < 27:
-            cprint(
-                f"STG на балансе {STG_balance}, если оставить больше 100 монет на балансе, тогджа не хватит чтобы положить в пул, там нужно монет 27 минимум. \nЗавершение работы",
-                "red",
+            state = inch_swap(
+                web3,
+                private_key,
+                NETWORK,
+                swap_out_str,
+                swap_in_str,
+                my_address,
+                tokens_amount,
             )
-            sys.exit(1)
-        lock_STG(web3, private_key, NETWORK, my_address, STG_amount)
-        time.sleep(random.randint(sl_sec_beg, sl_sec_end))
+            if not state:
+                sys.exit(state)
 
-        # 4) начинаем апрув USDC для закидывания в ликву
-        aprove_adr_dict = {
-            "to_ticker": "USDC",
-            "to_adr": Web3.toChecksumAddress(network_erc20_addr[NETWORK]["USDC"]),
-            "spender_ticker": "Stargate Finance: Router",
-            "spender_adr": Web3.toChecksumAddress(STARGATE_ROUTER_ADDR),
-        }
-        approve_contract(web3, private_key, NETWORK, aprove_adr_dict, my_address)
-        time.sleep(random.randint(sl_sec_beg, sl_sec_end))
+            # 2) начинаем апрув в контракте  STG Token для veSTG
+            aprove_adr_dict = {
+                "to_ticker": "STG",
+                "to_adr": Web3.toChecksumAddress(network_erc20_addr[NETWORK]["STG"]),
+                "spender_ticker": "veSTG",
+                "spender_adr": Web3.toChecksumAddress(
+                    network_erc20_addr[NETWORK]["veSTG"]
+                ),
+            }
+            approve_contract(
+                web3,
+                private_key,
+                NETWORK,
+                aprove_adr_dict,
+                my_address,
+            )
 
-        # 5) теперь закидываем ликвидность в USDC
-        amount = getRandomLiquidity()
-        add_liq_USDC(web3, private_key, NETWORK, my_address, amount)
-        time.sleep(random.randint(sl_sec_beg, sl_sec_end))
+            # 3) лочим STG на 36 месяцев, получаем veSTG
+            STG_balance = get_token_balance(web3, NETWORK, my_address, swap_in_str)
+            STG_amount = STG_balance
+            if STG_amount < 27:
+                cprint(
+                    f"STG на балансе {STG_balance}, если оставить больше 100 монет на балансе, тогджа не хватит чтобы положить в пул, там нужно монет 27 минимум. \nЗавершение работы",
+                    "red",
+                )
+                sys.exit(1)
+            lock_STG(web3, private_key, NETWORK, my_address, STG_amount)
+            time.sleep(
+                random.randint(
+                    config["RANGES"]["min_staking_liqudity_delay"],
+                    config["RANGES"]["max_staking_liqudity_delay"],
+                )
+            )
+        if config["OPTIONS"]["liquidity"]:
+            # 4) начинаем апрув USDC для закидывания в ликву
+            aprove_adr_dict = {
+                "to_ticker": config["OPTIONS"]["selected_token"],
+                "to_adr": Web3.toChecksumAddress(
+                    network_erc20_addr[NETWORK][config["OPTIONS"]["selected_token"]]
+                ),
+                "spender_ticker": "Stargate Finance: Router",
+                "spender_adr": Web3.toChecksumAddress(STARGATE_ROUTER_ADDR),
+            }
+            approve_contract(web3, private_key, NETWORK, aprove_adr_dict, my_address)
+            # 5) теперь закидываем ликвидность в USDC
+            amount = getRandomLiquidity()
+            add_liq_USDC(web3, private_key, NETWORK, my_address, amount)
 
-        # 6) апрув S*USDC для Stargate Finance: LP Staking
-        aprove_adr_dict = {
-            "to_ticker": "S*USDC",
-            "to_adr": Web3.toChecksumAddress(network_erc20_addr[NETWORK]["SUSDC"]),
-            "spender_ticker": "Stargate Finance: LP Staking",
-            "spender_adr": Web3.toChecksumAddress(STARGATE_STAKING_ADDR),
-        }
-        approve_contract(web3, private_key, NETWORK, aprove_adr_dict, my_address)
-        time.sleep(random.randint(sl_sec_beg, sl_sec_end))
+            # 6) апрув S*USDC для Stargate Finance: LP Staking
+            aprove_adr_dict = {
+                "to_ticker": "S*USDC",
+                "to_adr": Web3.toChecksumAddress(network_erc20_addr[NETWORK]["SUSDC"]),
+                "spender_ticker": "Stargate Finance: LP Staking",
+                "spender_adr": Web3.toChecksumAddress(STARGATE_STAKING_ADDR),
+            }
+            approve_contract(web3, private_key, NETWORK, aprove_adr_dict, my_address)
 
-        # 7) депозитим в фарм
-        SUSDC_amount = get_token_balance(web3, NETWORK, my_address, "SUSDC")
-        deposit_farm(web3, private_key, NETWORK, my_address, SUSDC_amount)
+            # 7) депозитим в фарм
+            SUSDC_amount = get_token_balance(web3, NETWORK, my_address, "SUSDC")
+            deposit_farm(web3, private_key, NETWORK, my_address, SUSDC_amount)
 
-        time.sleep(random.randint(sl_sec_beg, sl_sec_end))
+        time.sleep(
+            random.randint(
+                config["RANGES"]["min_delay_in_seconds"],
+                config["RANGES"]["max_delay_in_seconds"],
+            )
+        )

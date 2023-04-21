@@ -1,11 +1,8 @@
 RPC = {
-    # '1': '',
-    # '3': '',
     "OPTIMISM": "https://mainnet.optimism.io",
     "BSC": "https://bsc-dataseed.binance.org",
     "MATIC": "https://polygon-rpc.com",
     "ARBITRUM": "https://arb1.arbitrum.io/rpc",
-    # '43114': '',  # https://support.avax.network/en/articles/4626956-how-do-i-set-up-metamask-on-avalanche
 }
 
 
@@ -41,9 +38,6 @@ txn_explorer = {
     "ARBITRUM": "https://arbiscan.io/tx/",
 }
 
-
-sl_sec_beg = 15
-sl_sec_end = 30
 
 SLIPPAGE_1INCH = "1"
 
