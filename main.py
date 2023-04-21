@@ -343,31 +343,6 @@ def deposit_farm(web3, private_key, NETWORK, my_address, amount):
 
 
 if __name__ == "__main__":
-    cprint(
-        f"-----------------------------------------------------------------------------------------------",
-        "green",
-    )
-    cprint(
-        f"------------------------>      Chanel https://t.me/web3_python        <------------------------",
-        "green",
-    )
-    cprint(
-        f"------------------------>     Chat https://t.me/chat_web3_python      <------------------------",
-        "green",
-    )
-    cprint(
-        f"------------------------>        Helped you? You can help me.         <------------------------",
-        "green",
-    )
-    cprint(
-        f"------------------------>  0x137223bd1428cf030211A898204f953792C07319 <------------------------",
-        "green",
-    )
-    cprint(
-        f"-----------------------------------------------------------------------------------------------",
-        "green",
-    )
-
     with open("private_keys.txt", "r") as f:
         keys_list = [row.strip() for row in f]
     random.shuffle(keys_list)
