@@ -1,4 +1,4 @@
-# stargate-roles-stake-far
+# stake-stargate-usdc
 
 ## Установка
 
