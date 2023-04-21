@@ -19,7 +19,7 @@ def get_erc20_contract(web3, contract_address, ERC20_ABI=""):
         )
 
     contract = web3.eth.contract(
-        Web3.toChecksumAddress(contract_address), abi=ERC20_ABI
+        Web3.to_checksum_address(contract_address), abi=ERC20_ABI
     )
 
     return contract
@@ -78,26 +78,24 @@ def float_str(amount, decimals=18):
     return text_float
 
 
-def getRandomStakeDuration():
+
+def getRandomMonth():
     rand_month = random.randint(
         int(config["RANGES"]["min_time_in_months"]),
         int(config["RANGES"]["max_time_in_months"]),
     )
-    return monthsToEpoch(rand_month)
+    return rand_month
 
 
 def getRandomTokensAmount():
     return random.uniform(
-        int(config["RANGES"]["min_tokens_amount"]),
-        int(config["RANGES"]["max_tokens_amount"]),
+        float(config["RANGES"]["min_tokens_amount"]),
+        float(config["RANGES"]["max_tokens_amount"]),
     )
 
 
 def getRandomLiquidity():
-    return round(
-        random.uniform(
-            config["RANGES"]["min_liquidity_amount"],
-            config["RANGES"]["max_liquidity_amount"],
-        ),
-        2,
-    )
+    return random.uniform(
+            float(config["RANGES"]["min_liquidity_amount"]),
+            float(config["RANGES"]["max_liquidity_amount"]),
+        )
