@@ -7,21 +7,11 @@ import json
 import random
 import sys
 from consts import *
+import configparser
+from utils import *
 
-
-def int_to_decimal(qty, decimal):
-    return int(qty * int("".join(["1"] + ["0"] * decimal)))
-
-
-def decimal_to_int(price, decimal):
-    return price / int("".join((["1"] + ["0"] * decimal)))
-
-
-def float_str(amount, decimals=18):
-    temp_str = "%0.18f"
-    temp_str = temp_str.replace("18", str(decimals))
-    text_float = temp_str % amount
-    return text_float
+config = configparser.ConfigParser()
+config.read("config.ini", "utf-8")
 
 
 def get_erc20_contract(web3, contract_address, ERC20_ABI=""):
@@ -54,8 +44,8 @@ def get_contract_balance(contract, user_address):
     return {"symbol": symbol, "balance": balance}
 
 
-def get_token_balance(web3, network, ticker):
-    contract = get_erc20_contract(web3, network_erc20_addr[network][ticker])
+def get_token_balance(web3, NETWORK, ticker):
+    contract = get_erc20_contract(web3, network_erc20_addr[NETWORK][ticker])
     balance_dict = get_contract_balance(contract, my_address)
     return balance_dict["balance"]
 
@@ -73,59 +63,6 @@ def get_api_call_data(url):
         print(call_data.text)
 
 
-def web_sushi(
-    web3, private_key, network, contract, swap_out_str, swap_in_str, my_address, amount
-):
-    try:
-        now = datetime.datetime.now()
-        now_dt = now.strftime("%d-%m-%Y %H:%M")
-        swap_out_adr = Web3.toChecksumAddress(network_erc20_addr[network][swap_out_str])
-        swap_in_adr = Web3.toChecksumAddress(network_erc20_addr[network][swap_in_str])
-        swap_out_ABI = network_erc20_abi[network][swap_out_str]
-        swap_out_contract = get_erc20_contract(web3, swap_out_adr, swap_out_ABI)
-        out_decimals = swap_out_contract.functions.decimals().call()
-        amount_d = int_to_decimal(amount, out_decimals)
-        amount_str = float_str(amount)
-
-        gas_price = web3.eth.gas_price
-        nonce = web3.eth.get_transaction_count(my_address)
-
-        # if swap_out_str == 'ETH':
-        #     func_sushi_swap = contract.functions.swapExactETHForTokens
-        # else:
-        #     func_sushi_swap = contract.functions.swapExactTokensForTokens
-
-        contract_txn = contract.functions.swapExactETHForTokens(
-            0,  # amountOutMin здесь нужно высчитывать и ставить минимальное получаемое значение, на сумме больше 10$ могут боты отжать много, у меня с 1 транзы 30% отжали
-            [swap_out_adr, swap_in_adr],
-            my_address,  # receiver
-            (int(time.time()) + 10000),  # deadline
-        ).buildTransaction(
-            {
-                "from": my_address,
-                "value": amount_d,
-                #'gas': gasLimit,   # не нужно его явно указывать, конратк сам подберет
-                "gasPrice": gas_price,
-                "nonce": nonce,
-            }
-        )
-
-        signed_txn = web3.eth.account.sign_transaction(contract_txn, private_key)
-        txn_hash = web3.eth.send_raw_transaction(signed_txn.rawTransaction)
-        txn_text = txn_hash.hex()
-
-        cprint(
-            f"\n{now_dt} {my_address} | УСПЕШНО обмен {amount_str} {swap_out_str} на {swap_in_str} tx {txn_explorer[network]}{txn_text}",
-            "green",
-        )
-
-    except Exception as error:
-        cprint(
-            f"\n{now_dt} {my_address} | НЕУДАЧНО обмен {amount_str} {swap_out_str} на {swap_in_str} | {error}",
-            "red",
-        )
-
-
 def api_1inch_is_stable():
     _1inchurl = f"{base_url}/healthcheck"
     json_data = get_api_call_data(_1inchurl)
@@ -138,7 +75,7 @@ def api_1inch_is_stable():
 
 
 def inch_swap(
-    web3, private_key, network, swap_out_str, swap_in_str, my_address, amount
+    web3, private_key, NETWORK, swap_out_str, swap_in_str, my_address, amount
 ):
     if not api_1inch_is_stable():
         return 1
@@ -147,9 +84,9 @@ def inch_swap(
     now_dt = now.strftime("%d-%m-%Y %H:%M")
 
     try:
-        # swap_out = Web3.toChecksumAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE")  # native ETH in network
-        swap_out_adr = Web3.toChecksumAddress(network_erc20_addr[network][swap_out_str])
-        swap_out_ABI = network_erc20_abi[network][swap_out_str]
+        # swap_out = Web3.toChecksumAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE")  # native ETH in NETWORK
+        swap_out_adr = Web3.toChecksumAddress(network_erc20_addr[NETWORK][swap_out_str])
+        swap_out_ABI = network_erc20_abi[NETWORK][swap_out_str]
         swap_out_contract = get_erc20_contract(web3, swap_out_adr, swap_out_ABI)
         out_decimals = swap_out_contract.functions.decimals().call()
         amount_d = int_to_decimal(amount, out_decimals)
@@ -157,13 +94,13 @@ def inch_swap(
 
         out_allowance = inch_allowance(swap_out_adr, my_address)
 
-        swap_in_adr = Web3.toChecksumAddress(network_erc20_addr[network][swap_in_str])
-        # swap_in_ABI = network_erc20_abi[network][swap_in_str]
+        swap_in_adr = Web3.toChecksumAddress(network_erc20_addr[NETWORK][swap_in_str])
+        # swap_in_ABI = network_erc20_abi[NETWORK][swap_in_str]
         # swap_out_contract = get_erc20_contract(web3, swap_in_adr, swap_in_ABI)
 
         if int(out_allowance) <= amount_d:
             state = inch_set_approve(
-                web3, private_key, network, swap_out_adr, my_address
+                web3, private_key, NETWORK, swap_out_adr, my_address
             )
             if not state:
                 return state
@@ -183,7 +120,7 @@ def inch_swap(
         txn_text = tx_hash.hex()
 
         cprint(
-            f"\n{now_dt} {my_address} | УСПЕШНО обмен {amount_str} {swap_out_str} на {swap_in_str} tx {txn_explorer[network]}{txn_text}",
+            f"\n{now_dt} {my_address} | УСПЕШНО обмен {amount_str} {swap_out_str} на {swap_in_str} tx {txn_explorer[NETWORK]}{txn_text}",
             "green",
         )
         return True
@@ -198,7 +135,7 @@ def inch_swap(
         return False
 
 
-def inch_set_approve(web3, private_key, network, swap_out_str, my_address):
+def inch_set_approve(web3, private_key, NETWORK, swap_out_str, my_address):
     now = datetime.datetime.now()
     now_dt = now.strftime("%d-%m-%Y %H:%M")
 
@@ -224,7 +161,7 @@ def inch_set_approve(web3, private_key, network, swap_out_str, my_address):
         txn_text = tx_hash.hex()
 
         cprint(
-            f"\n{now_dt} {my_address} | УСПЕШНО апрув на 1inch {swap_out_str} tx {txn_explorer[network]}{txn_text}",
+            f"\n{now_dt} {my_address} | УСПЕШНО апрув на 1inch {swap_out_str} tx {txn_explorer[NETWORK]}{txn_text}",
             "green",
         )
         return True
@@ -252,7 +189,7 @@ def inch_allowance(swap_out_adr, my_address):
     return out_allowance
 
 
-def approve_contract(web3, private_key, network, adr_dict, my_address):
+def approve_contract(web3, private_key, NETWORK, adr_dict, my_address):
     try:
         approve_amount = 2**256 - 1
         now = datetime.datetime.now()
@@ -289,7 +226,7 @@ def approve_contract(web3, private_key, network, adr_dict, my_address):
         txn_text = txn_hash.hex()
 
         cprint(
-            f"\n{now_dt} {my_address} | УСПЕШНО апрув {adr_dict['to_ticker']} для {adr_dict['spender_ticker']} tx {txn_explorer[network]}{txn_text}",
+            f"\n{now_dt} {my_address} | УСПЕШНО апрув {adr_dict['to_ticker']} для {adr_dict['spender_ticker']} tx {txn_explorer[NETWORK]}{txn_text}",
             "green",
         )
         return True
@@ -302,13 +239,13 @@ def approve_contract(web3, private_key, network, adr_dict, my_address):
         return False
 
 
-def lock_STG(web3, private_key, network, my_address, amount):
+def lock_STG(web3, private_key, NETWORK, my_address, amount):
     try:
         now = datetime.datetime.now()
         now_dt = now.strftime("%d-%m-%Y %H:%M")
 
-        contr_addr = Web3.toChecksumAddress(network_erc20_addr[network]["veSTG"])
-        contr_addr_ABI = network_erc20_abi[network]["veSTG"]
+        contr_addr = Web3.toChecksumAddress(network_erc20_addr[NETWORK]["veSTG"])
+        contr_addr_ABI = network_erc20_abi[NETWORK]["veSTG"]
         contr = get_erc20_contract(web3, contr_addr, contr_addr_ABI)
         out_decimals = contr.functions.decimals().call()
         amount_d = int_to_decimal(amount, out_decimals)
@@ -330,7 +267,7 @@ def lock_STG(web3, private_key, network, my_address, amount):
         txn_text = txn_hash.hex()
 
         cprint(
-            f"\n{now_dt} {my_address} | УСПЕШНО lock {amount_str} STG tx {txn_explorer[network]}{txn_text}",
+            f"\n{now_dt} {my_address} | УСПЕШНО lock {amount_str} STG tx {txn_explorer[NETWORK]}{txn_text}",
             "green",
         )
 
@@ -340,7 +277,7 @@ def lock_STG(web3, private_key, network, my_address, amount):
         )
 
 
-def add_liq_USDC(web3, private_key, network, my_address, amount):
+def add_liq_USDC(web3, private_key, NETWORK, my_address, amount):
     try:
         now = datetime.datetime.now()
         now_dt = now.strftime("%d-%m-%Y %H:%M")
@@ -372,7 +309,7 @@ def add_liq_USDC(web3, private_key, network, my_address, amount):
         txn_text = txn_hash.hex()
 
         cprint(
-            f"\n{now_dt} {my_address} | УСПЕШНО add_liq_USDC {amount_str} tx {txn_explorer[network]}{txn_text}",
+            f"\n{now_dt} {my_address} | УСПЕШНО add_liq_USDC {amount_str} tx {txn_explorer[NETWORK]}{txn_text}",
             "green",
         )
     except Exception as error:
@@ -382,13 +319,13 @@ def add_liq_USDC(web3, private_key, network, my_address, amount):
         )
 
 
-def deposit_farm(web3, private_key, network, my_address, amount):
+def deposit_farm(web3, private_key, NETWORK, my_address, amount):
     try:
         now = datetime.datetime.now()
         now_dt = now.strftime("%d-%m-%Y %H:%M")
 
         contr_addr = Web3.toChecksumAddress(
-            "0xea8dfee1898a7e0a59f7527f076106d7e44c2176"
+            STARGATE_STAKING_ADDR
         )  # Stargate Finance: LP Staking
         contr_ABI = '[{"inputs":[{"internalType":"contract StargateToken","name":"_stargate","type":"address"},{"internalType":"uint256","name":"_stargatePerBlock","type":"uint256"},{"internalType":"uint256","name":"_startBlock","type":"uint256"},{"internalType":"uint256","name":"_bonusEndBlock","type":"uint256"}],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":true,"internalType":"uint256","name":"pid","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Deposit","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":true,"internalType":"uint256","name":"pid","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"EmergencyWithdraw","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"previousOwner","type":"address"},{"indexed":true,"internalType":"address","name":"newOwner","type":"address"}],"name":"OwnershipTransferred","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":true,"internalType":"uint256","name":"pid","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Withdraw","type":"event"},{"inputs":[],"name":"BONUS_MULTIPLIER","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_allocPoint","type":"uint256"},{"internalType":"contract IERC20","name":"_lpToken","type":"address"}],"name":"add","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"bonusEndBlock","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_pid","type":"uint256"},{"internalType":"uint256","name":"_amount","type":"uint256"}],"name":"deposit","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_pid","type":"uint256"}],"name":"emergencyWithdraw","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_from","type":"uint256"},{"internalType":"uint256","name":"_to","type":"uint256"}],"name":"getMultiplier","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"lpBalances","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"massUpdatePools","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_pid","type":"uint256"},{"internalType":"address","name":"_user","type":"address"}],"name":"pendingStargate","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"poolInfo","outputs":[{"internalType":"contract IERC20","name":"lpToken","type":"address"},{"internalType":"uint256","name":"allocPoint","type":"uint256"},{"internalType":"uint256","name":"lastRewardBlock","type":"uint256"},{"internalType":"uint256","name":"accStargatePerShare","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"poolLength","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"renounceOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_pid","type":"uint256"},{"internalType":"uint256","name":"_allocPoint","type":"uint256"}],"name":"set","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_stargatePerBlock","type":"uint256"}],"name":"setStargatePerBlock","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"stargate","outputs":[{"internalType":"contract StargateToken","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"stargatePerBlock","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"startBlock","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"totalAllocPoint","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"newOwner","type":"address"}],"name":"transferOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_pid","type":"uint256"}],"name":"updatePool","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"address","name":"","type":"address"}],"name":"userInfo","outputs":[{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"uint256","name":"rewardDebt","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_pid","type":"uint256"},{"internalType":"uint256","name":"_amount","type":"uint256"}],"name":"withdraw","outputs":[],"stateMutability":"nonpayable","type":"function"}]'
         contr = get_erc20_contract(web3, contr_addr, contr_ABI)
@@ -400,7 +337,6 @@ def deposit_farm(web3, private_key, network, my_address, amount):
             {
                 "from": my_address,
                 "value": 0,
-                #'gas': gasLimit,
                 "gasPrice": web3.eth.gas_price,
                 "nonce": web3.eth.get_transaction_count(my_address),
             }
@@ -411,7 +347,7 @@ def deposit_farm(web3, private_key, network, my_address, amount):
         txn_text = txn_hash.hex()
 
         cprint(
-            f"\n{now_dt} {my_address} | УСПЕШНО deposit Stargate Finance: LP Staking {amount_str} S*USDC tx {txn_explorer[network]}{txn_text}",
+            f"\n{now_dt} {my_address} | УСПЕШНО deposit Stargate Finance: LP Staking {amount_str} S*USDC tx {txn_explorer[NETWORK]}{txn_text}",
             "green",
         )
 
@@ -457,34 +393,22 @@ if __name__ == "__main__":
         sys.exit(1)
 
     for private_key in keys_list:
-        network = "ARBITRUM"
-        web3 = Web3(Web3.HTTPProvider(RPC[network]))
+        web3 = Web3(Web3.HTTPProvider(RPC[NETWORK]))
         account = web3.eth.account.privateKeyToAccount(private_key)
         my_address = account.address
         gas_price = web3.eth.gas_price
         chain_id = web3.eth.chain_id
         base_url = f"https://api.1inch.io/v5.0/{chain_id}"
 
-        # 1inch не работал, делал на суши, но суши помойка, ликвы мало к тому же, короче оставлю здесь, мало ли пригодится кому
-        # sushi_contract_address_arbitrum = Web3.toChecksumAddress('0x1b02da8cb0d097eb8d57a175b88c7d8b47997506')
-        # sushi_ABI_arbitrum = '[{"inputs":[{"internalType":"address","name":"_factory","type":"address"},{"internalType":"address","name":"_WETH","type":"address"}],"stateMutability":"nonpayable","type":"constructor"},{"inputs":[],"name":"WETH","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"tokenA","type":"address"},{"internalType":"address","name":"tokenB","type":"address"},{"internalType":"uint256","name":"amountADesired","type":"uint256"},{"internalType":"uint256","name":"amountBDesired","type":"uint256"},{"internalType":"uint256","name":"amountAMin","type":"uint256"},{"internalType":"uint256","name":"amountBMin","type":"uint256"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"addLiquidity","outputs":[{"internalType":"uint256","name":"amountA","type":"uint256"},{"internalType":"uint256","name":"amountB","type":"uint256"},{"internalType":"uint256","name":"liquidity","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"amountTokenDesired","type":"uint256"},{"internalType":"uint256","name":"amountTokenMin","type":"uint256"},{"internalType":"uint256","name":"amountETHMin","type":"uint256"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"addLiquidityETH","outputs":[{"internalType":"uint256","name":"amountToken","type":"uint256"},{"internalType":"uint256","name":"amountETH","type":"uint256"},{"internalType":"uint256","name":"liquidity","type":"uint256"}],"stateMutability":"payable","type":"function"},{"inputs":[],"name":"factory","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"amountOut","type":"uint256"},{"internalType":"uint256","name":"reserveIn","type":"uint256"},{"internalType":"uint256","name":"reserveOut","type":"uint256"}],"name":"getAmountIn","outputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"}],"stateMutability":"pure","type":"function"},{"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"uint256","name":"reserveIn","type":"uint256"},{"internalType":"uint256","name":"reserveOut","type":"uint256"}],"name":"getAmountOut","outputs":[{"internalType":"uint256","name":"amountOut","type":"uint256"}],"stateMutability":"pure","type":"function"},{"inputs":[{"internalType":"uint256","name":"amountOut","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"}],"name":"getAmountsIn","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"}],"name":"getAmountsOut","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"amountA","type":"uint256"},{"internalType":"uint256","name":"reserveA","type":"uint256"},{"internalType":"uint256","name":"reserveB","type":"uint256"}],"name":"quote","outputs":[{"internalType":"uint256","name":"amountB","type":"uint256"}],"stateMutability":"pure","type":"function"},{"inputs":[{"internalType":"address","name":"tokenA","type":"address"},{"internalType":"address","name":"tokenB","type":"address"},{"internalType":"uint256","name":"liquidity","type":"uint256"},{"internalType":"uint256","name":"amountAMin","type":"uint256"},{"internalType":"uint256","name":"amountBMin","type":"uint256"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"removeLiquidity","outputs":[{"internalType":"uint256","name":"amountA","type":"uint256"},{"internalType":"uint256","name":"amountB","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"liquidity","type":"uint256"},{"internalType":"uint256","name":"amountTokenMin","type":"uint256"},{"internalType":"uint256","name":"amountETHMin","type":"uint256"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"removeLiquidityETH","outputs":[{"internalType":"uint256","name":"amountToken","type":"uint256"},{"internalType":"uint256","name":"amountETH","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"liquidity","type":"uint256"},{"internalType":"uint256","name":"amountTokenMin","type":"uint256"},{"internalType":"uint256","name":"amountETHMin","type":"uint256"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"removeLiquidityETHSupportingFeeOnTransferTokens","outputs":[{"internalType":"uint256","name":"amountETH","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"liquidity","type":"uint256"},{"internalType":"uint256","name":"amountTokenMin","type":"uint256"},{"internalType":"uint256","name":"amountETHMin","type":"uint256"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"},{"internalType":"bool","name":"approveMax","type":"bool"},{"internalType":"uint8","name":"v","type":"uint8"},{"internalType":"bytes32","name":"r","type":"bytes32"},{"internalType":"bytes32","name":"s","type":"bytes32"}],"name":"removeLiquidityETHWithPermit","outputs":[{"internalType":"uint256","name":"amountToken","type":"uint256"},{"internalType":"uint256","name":"amountETH","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"liquidity","type":"uint256"},{"internalType":"uint256","name":"amountTokenMin","type":"uint256"},{"internalType":"uint256","name":"amountETHMin","type":"uint256"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"},{"internalType":"bool","name":"approveMax","type":"bool"},{"internalType":"uint8","name":"v","type":"uint8"},{"internalType":"bytes32","name":"r","type":"bytes32"},{"internalType":"bytes32","name":"s","type":"bytes32"}],"name":"removeLiquidityETHWithPermitSupportingFeeOnTransferTokens","outputs":[{"internalType":"uint256","name":"amountETH","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"tokenA","type":"address"},{"internalType":"address","name":"tokenB","type":"address"},{"internalType":"uint256","name":"liquidity","type":"uint256"},{"internalType":"uint256","name":"amountAMin","type":"uint256"},{"internalType":"uint256","name":"amountBMin","type":"uint256"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"},{"internalType":"bool","name":"approveMax","type":"bool"},{"internalType":"uint8","name":"v","type":"uint8"},{"internalType":"bytes32","name":"r","type":"bytes32"},{"internalType":"bytes32","name":"s","type":"bytes32"}],"name":"removeLiquidityWithPermit","outputs":[{"internalType":"uint256","name":"amountA","type":"uint256"},{"internalType":"uint256","name":"amountB","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"amountOut","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"swapETHForExactTokens","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"amountOutMin","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"swapExactETHForTokens","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"amountOutMin","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"swapExactETHForTokensSupportingFeeOnTransferTokens","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"uint256","name":"amountOutMin","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"swapExactTokensForETH","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"uint256","name":"amountOutMin","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"swapExactTokensForETHSupportingFeeOnTransferTokens","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"uint256","name":"amountOutMin","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"swapExactTokensForTokens","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"uint256","name":"amountOutMin","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"swapExactTokensForTokensSupportingFeeOnTransferTokens","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"amountOut","type":"uint256"},{"internalType":"uint256","name":"amountInMax","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"swapTokensForExactETH","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"amountOut","type":"uint256"},{"internalType":"uint256","name":"amountInMax","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"swapTokensForExactTokens","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"nonpayable","type":"function"},{"stateMutability":"payable","type":"receive"}]'
-        # sushi_contract_arbitrum = get_erc20_contract(web3, sushi_contract_address_arbitrum, sushi_ABI_arbitrum)
-        # WETH_amount = round(random.uniform(0.0497, 0.0525), 18) # покупаем 131-140 монет на 60$
-        # web_sushi(web3, private_key, network, sushi_contract_arbitrum, swap_out_str, swap_in_str, my_address, WETH_amount)
-        # time.sleep(random.randint(sl_sec_beg, sl_sec_end))
-
         # 1) покупаем STG
-        # USDC_amount = 0.01
-        USDC_amount = random.uniform(
-            57.0497, 60.9
-        )  # покупаем 131-140 монет на 61$ макс по курсу, на момент написания кода
+        USDC_amount = random.uniform(57.0497, 60.9)
         swap_out_str = "USDC"
         swap_in_str = "STG"
 
         state = inch_swap(
             web3,
             private_key,
-            network,
+            NETWORK,
             swap_out_str,
             swap_in_str,
             my_address,
@@ -497,21 +421,21 @@ if __name__ == "__main__":
         # 2) начинаем апрув в контракте  STG Token для veSTG
         aprove_adr_dict = {
             "to_ticker": "STG",
-            "to_adr": Web3.toChecksumAddress(network_erc20_addr[network]["STG"]),
+            "to_adr": Web3.toChecksumAddress(network_erc20_addr[NETWORK]["STG"]),
             "spender_ticker": "veSTG",
-            "spender_adr": Web3.toChecksumAddress(network_erc20_addr[network]["veSTG"]),
+            "spender_adr": Web3.toChecksumAddress(network_erc20_addr[NETWORK]["veSTG"]),
         }
         approve_contract(
             web3,
             private_key,
-            network,
+            NETWORK,
             aprove_adr_dict,
             my_address,
         )
         time.sleep(random.randint(sl_sec_beg, sl_sec_end))
 
         # 3) лочим STG на 36 месяцев, получаем veSTG
-        STG_balance = get_token_balance(web3, network, swap_in_str)
+        STG_balance = get_token_balance(web3, NETWORK, swap_in_str)
         STG_amount = STG_balance - round(random.uniform(100.1, 103.01), 4)
         if STG_amount < 27:
             cprint(
@@ -519,41 +443,37 @@ if __name__ == "__main__":
                 "red",
             )
             sys.exit(1)
-        lock_STG(web3, private_key, network, my_address, STG_amount)
+        lock_STG(web3, private_key, NETWORK, my_address, STG_amount)
         time.sleep(random.randint(sl_sec_beg, sl_sec_end))
 
         # 4) начинаем апрув USDC для закидывания в ликву
         aprove_adr_dict = {
             "to_ticker": "USDC",
-            "to_adr": Web3.toChecksumAddress(network_erc20_addr[network]["USDC"]),
+            "to_adr": Web3.toChecksumAddress(network_erc20_addr[NETWORK]["USDC"]),
             "spender_ticker": "Stargate Finance: Router",
-            "spender_adr": Web3.toChecksumAddress(
-                "0x53Bf833A5d6c4ddA888F69c22C88C9f356a41614"
-            ),
+            "spender_adr": Web3.toChecksumAddress(STARGATE_ROUTER_ADDR),
         }
-        approve_contract(web3, private_key, network, aprove_adr_dict, my_address)
+        approve_contract(web3, private_key, NETWORK, aprove_adr_dict, my_address)
         time.sleep(random.randint(sl_sec_beg, sl_sec_end))
 
         # 5) теперь закидываем ликвидность в USDC
         # amount = 0.03
         amount = round(random.uniform(1.05, 1.5), 2)  # от 1.05$ до 1.59$
-        add_liq_USDC(web3, private_key, network, my_address, amount)
+        add_liq_USDC(web3, private_key, NETWORK, my_address, amount)
         time.sleep(random.randint(sl_sec_beg, sl_sec_end))
 
         # 6) апрув S*USDC для Stargate Finance: LP Staking
         aprove_adr_dict = {
             "to_ticker": "S*USDC",
-            "to_adr": Web3.toChecksumAddress(network_erc20_addr[network]["SUSDC"]),
+            "to_adr": Web3.toChecksumAddress(network_erc20_addr[NETWORK]["SUSDC"]),
             "spender_ticker": "Stargate Finance: LP Staking",
-            "spender_adr": Web3.toChecksumAddress(
-                "0xeA8DfEE1898a7e0a59f7527F076106d7e44c2176"
-            ),
+            "spender_adr": Web3.toChecksumAddress(STARGATE_STAKING_ADDR),
         }
-        approve_contract(web3, private_key, network, aprove_adr_dict, my_address)
+        approve_contract(web3, private_key, NETWORK, aprove_adr_dict, my_address)
         time.sleep(random.randint(sl_sec_beg, sl_sec_end))
 
         # 7) депозитим в фарм
-        SUSDC_amount = get_token_balance(web3, network, "SUSDC")
-        deposit_farm(web3, private_key, network, my_address, SUSDC_amount)
+        SUSDC_amount = get_token_balance(web3, NETWORK, "SUSDC")
+        deposit_farm(web3, private_key, NETWORK, my_address, SUSDC_amount)
 
         time.sleep(random.randint(sl_sec_beg, sl_sec_end))
