@@ -285,7 +285,7 @@ def add_liq(web3, private_key, NETWORK, my_address, token, amount):
         if token == "ETH":
             add_liq_result = add_liquidity_eth(web3, amount, my_address)
         else:
-            add_liq_result = add_liquidity_token(token, amount)
+            add_liq_result = add_liquidity_token(web3, token, amount, my_address)
         if len(add_liq_result) == 1:
             (amount_str,) = add_liq_result
             raise Exception("Add liquidity error")
@@ -390,7 +390,7 @@ if __name__ == "__main__":
             )
             if not state:
                 sys.exit(state)
-
+            time.sleep(5)
             # 2) начинаем апрув в контракте  STG Token для veSTG
             if swap_out_str != "ETH":
                 aprove_adr_dict = {
@@ -421,6 +421,7 @@ if __name__ == "__main__":
                 )
                 sys.exit(1)
             WALLET_RESULTS[my_address]["stg_lock_amount"] = STG_amount
+            time.sleep(5)
             lock_STG(web3, private_key, NETWORK, my_address, STG_amount)
             time.sleep(
                 random.randint(
